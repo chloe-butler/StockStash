@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stock Performance Visualizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+    }
+    input, button {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+    }
+    #chartContainer {
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stock Performance Visualizer</h1>
+    <input type="text" id="stockSymbol" placeholder="Enter Stock Symbol (e.g., AAPL)" />
+    <label for="startDate">Start Date:</label>
+    <input type="date" id="startDate" />
+    <label for="endDate">End Date:</label>
+    <input type="date" id="endDate" />
+    <button onclick="fetchStockData()">Get Chart</button>
+    <div id="chartContainer">
+      <canvas id="stockChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let chart;
+
+    async function fetchStockData() {
+      const symbol = document.getElementById('stockSymbol').value.toUpperCase();
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const timeSeries = data['Time Series (Daily)'];
+
+        if (!stockData[symbol]) {
+    alert('Symbol not found in local data.');
+    return;
+  }
+
+        const dates = Object.keys(timeSeries).sort();
+        const prices = dates.map(date => ({
+          date,
+          close: parseFloat(timeSeries[date]['4. close'])
+        }));
+
+        // Filter data based on selected date range
+        const filteredPrices = prices.filter(p => {
+          const date = new Date(p.date);
+          return (!startDate || date >= new Date(startDate)) && (!endDate || date <= new Date(endDate));
+        });
+
+        const smaData = calculateSMA(filteredPrices, 20);
+
+        const labels = filteredPrices.map(p => p.date);
+        const closingPrices = filteredPrices.map(p => p.close);
+        const smaValues = smaData.map(p => p ? p.sma : null);
+
+        if (chart) {
+          chart.destroy();
+        }
+
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: `${symbol} Closing Price`,
+                data: closingPrices,
+                borderColor: 'blue',
+                fill: false
+              },
+              {
+                label: '20-Day SMA',
+                data: smaValues,
+                borderColor: 'red',
+                fill: false
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                display: true,
+                title: {
+                  display: true,
+                  text: 'Date'
+                }
+              },
+              y: {
+                display: true,
+                title: {
+                  display: true,
+                  text: 'Price (USD)'
+                }
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching stock data:', error);
+        alert('An error occurred while fetching data.');
+      }
+    }
+
+    function calculateSMA(data, windowSize) {
+      const sma = [];
+      for (let i = 0; i < data.length; i++) {
+        if (i < windowSize - 1) {
+          sma.push(null);
+          continue;
+        }
+        const window = data.slice(i - windowSize + 1, i + 1);
+        const sum = window.reduce((acc, val) => acc + val.close, 0);
+        sma.push({ date: data[i].date, sma: sum / windowSize });
+      }
+      return sma;
+    }
+  </script>
+</body>
+</html>
